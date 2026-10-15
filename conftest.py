@@ -52,6 +52,9 @@ def _install_stubs() -> None:
     config_entries.ConfigEntry = type("ConfigEntry", (), {})
 
     helpers = _ensure_module("homeassistant.helpers")
+    config_validation = _ensure_module("homeassistant.helpers.config_validation")
+    config_validation.config_entry_only_config_schema = lambda domain: lambda config: config
+    helpers.config_validation = config_validation
     typing_mod = _ensure_module("homeassistant.helpers.typing")
     typing_mod.ConfigType = dict
     helpers.typing = typing_mod

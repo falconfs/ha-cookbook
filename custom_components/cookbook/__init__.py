@@ -6,6 +6,7 @@ from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers import config_validation as cv
 from homeassistant.loader import async_get_loaded_integration
 from homeassistant.helpers.typing import ConfigType
 
@@ -14,6 +15,8 @@ from .http_views import CookbookImageView, CookbookTmpImageView, CookbookTmpUplo
 from .meal_plan_store import MealPlanStore
 from .services import register_services
 from .storage import RecipeStore
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def _async_register_frontend(hass: HomeAssistant, version: str) -> None:
