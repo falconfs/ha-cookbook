@@ -1,0 +1,19 @@
+{
+  "name": "ha-cookbook",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Recipe JSON schema (Zod) and validator for the cookbook-card. Tooling only; not part of the card bundle.",
+  "type": "module",
+  "scripts": {
+    "validate": "tsx validate-recipes.ts",
+    "dev": "node local-preview-server.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/frontend/*.test.js tests/frontend/components/*.test.js tests/frontend/services/*.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "zod": "4.4.3"
+  }
+}

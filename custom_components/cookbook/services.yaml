@@ -1,0 +1,126 @@
+list_recipes: {}
+get_meal_plan: {}
+add_meal_plan_entry:
+  fields:
+    date:
+      required: true
+      selector:
+        text:
+    slot_id:
+      required: true
+      selector:
+        text:
+    recipe_id:
+      required: false
+      selector:
+        text:
+    text:
+      required: false
+      selector:
+        text:
+update_meal_plan_entry:
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    date:
+      required: true
+      selector:
+        text:
+    slot_id:
+      required: true
+      selector:
+        text:
+    recipe_id:
+      required: false
+      selector:
+        text:
+    text:
+      required: false
+      selector:
+        text:
+delete_meal_plan_entry:
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+save_meal_plan_slots:
+  fields:
+    slots:
+      required: true
+      selector:
+        object:
+get_recipe:
+  fields:
+    recipe_id:
+      required: true
+      selector:
+        text:
+upsert_recipe:
+  fields:
+    recipe_id:
+      required: false
+      selector:
+        text:
+    recipe:
+      required: true
+      selector:
+        object:
+    tmp_image_token:
+      required: false
+      selector:
+        text:
+    remove_image:
+      required: false
+      selector:
+        boolean:
+delete_recipe:
+  fields:
+    recipe_id:
+      required: true
+      selector:
+        text:
+fetch_image_from_url:
+  fields:
+    recipe_id:
+      required: true
+      selector:
+        text:
+    image_url:
+      required: true
+      selector:
+        text:
+fetch_image_to_tmp:
+  fields:
+    image_url:
+      required: true
+      selector:
+        text:
+import_recipe_from_url:
+  fields:
+    url:
+      required: true
+      selector:
+        text:
+ai_import_recipe_from_url:
+  fields:
+    url:
+      required: true
+      selector:
+        text:
+    ai_task_entity:
+      required: false
+      selector:
+        text:
+ai_regroup_recipe:
+  fields:
+    recipe:
+      required: true
+      selector:
+        object:
+    ai_task_entity:
+      required: false
+      selector:
+        text:

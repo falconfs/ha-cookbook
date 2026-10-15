@@ -1,0 +1,117 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Cookbook",
+        "description": "Richte die lokale Rezeptsammlung und die Dashboard-Karten ein."
+      }
+    }
+  },
+  "services": {
+    "list_recipes": {
+      "name": "Rezepte auflisten",
+      "description": "Liefert Rezeptübersichten aus dem lokalen Speicher."
+    },
+    "get_meal_plan": {
+      "name": "Wochenplan abrufen",
+      "description": "Liefert den Wochenplan mit globalen Slots und Einträgen."
+    },
+    "add_meal_plan_entry": {
+      "name": "Planungseintrag hinzufügen",
+      "description": "Fügt ein Rezept oder einen freien Text zu einem Tag und Slot hinzu.",
+      "fields": {
+        "date": { "name": "Datum", "description": "Lokales Kalenderdatum im Format YYYY-MM-DD." },
+        "slot_id": { "name": "Slot-ID", "description": "ID des eingebauten oder eigenen Slots." },
+        "recipe_id": { "name": "Rezept-ID", "description": "Optionales Rezept für den Plan." },
+        "text": { "name": "Text oder Notiz", "description": "Freier Planeintrag oder optionale Notiz zum Rezept." }
+      }
+    },
+    "update_meal_plan_entry": {
+      "name": "Planungseintrag ändern",
+      "description": "Ändert Datum, Slot, Rezept oder Text eines vorhandenen Eintrags.",
+      "fields": {
+        "entry_id": { "name": "Eintrags-ID" },
+        "date": { "name": "Datum", "description": "Lokales Kalenderdatum im Format YYYY-MM-DD." },
+        "slot_id": { "name": "Slot-ID" },
+        "recipe_id": { "name": "Rezept-ID", "description": "Optionales Rezept für den Plan." },
+        "text": { "name": "Text oder Notiz", "description": "Freier Planeintrag oder optionale Notiz zum Rezept." }
+      }
+    },
+    "delete_meal_plan_entry": {
+      "name": "Planungseintrag löschen",
+      "description": "Löscht einen Planeintrag, ohne das Rezept zu verändern.",
+      "fields": {
+        "entry_id": { "name": "Eintrags-ID" }
+      }
+    },
+    "save_meal_plan_slots": {
+      "name": "Mahlzeit-Slots speichern",
+      "description": "Ersetzt die globale Slot-Konfiguration. Einträge entfernter eigener Slots werden neu zugeordnet.",
+      "fields": {
+        "slots": { "name": "Slots", "description": "Vollständige, sortierte Slot-Konfiguration." }
+      }
+    },
+    "get_recipe": {
+      "name": "Rezept abrufen",
+      "description": "Liefert ein Rezept aus dem lokalen Speicher.",
+      "fields": {
+        "recipe_id": { "name": "Rezept-ID" }
+      }
+    },
+    "upsert_recipe": {
+      "name": "Rezept speichern",
+      "description": "Erstellt oder ersetzt ein Rezept im lokalen Speicher.",
+      "fields": {
+        "recipe_id": { "name": "Rezept-ID", "description": "Leer lassen, um ein neues Rezept zu erstellen." },
+        "recipe": { "name": "Rezept", "description": "Vollständiges Rezeptdokument im v6-Format." },
+        "tmp_image_token": { "name": "Temporärer Bild-Token", "description": "Token eines zwischengespeicherten Bildes." },
+        "remove_image": { "name": "Bild entfernen", "description": "Entfernt das gespeicherte Bild beim Speichern." }
+      }
+    },
+    "delete_recipe": {
+      "name": "Rezept löschen",
+      "description": "Löscht ein Rezept aus dem lokalen Speicher.",
+      "fields": {
+        "recipe_id": { "name": "Rezept-ID" }
+      }
+    },
+    "fetch_image_from_url": {
+      "name": "Rezeptbild abrufen",
+      "description": "Lädt ein Bild für ein Rezept herunter und speichert es.",
+      "fields": {
+        "recipe_id": { "name": "Rezept-ID" },
+        "image_url": { "name": "Bild-URL" }
+      }
+    },
+    "fetch_image_to_tmp": {
+      "name": "Bild temporär abrufen",
+      "description": "Lädt ein Bild temporär herunter und liefert einen Token zurück.",
+      "fields": {
+        "image_url": { "name": "Bild-URL" }
+      }
+    },
+    "import_recipe_from_url": {
+      "name": "Rezept aus URL importieren",
+      "description": "Liest ein Rezept aus schema.org JSON-LD oder Microdata und liefert einen Entwurf zur Prüfung.",
+      "fields": {
+        "url": { "name": "Rezept-URL" }
+      }
+    },
+    "ai_import_recipe_from_url": {
+      "name": "Rezept mit KI importieren",
+      "description": "Nutzt Home Assistant AI Task, um einen Rezeptentwurf aus einer Webseite zu erstellen.",
+      "fields": {
+        "url": { "name": "Rezept-URL" },
+        "ai_task_entity": { "name": "AI-Task-Entity", "description": "Optionale Entity-ID; sonst wird die bevorzugte Entity verwendet." }
+      }
+    },
+    "ai_regroup_recipe": {
+      "name": "Rezeptzutaten mit KI zuordnen",
+      "description": "Bittet die KI, Zutaten den Schritten zuzuordnen, in denen sie zuerst verwendet werden.",
+      "fields": {
+        "recipe": { "name": "Rezept", "description": "Rezeptentwurf, dessen Zutaten neu zugeordnet werden." },
+        "ai_task_entity": { "name": "AI-Task-Entity", "description": "Optionale Entity-ID; sonst wird die bevorzugte Entity verwendet." }
+      }
+    }
+  }
+}

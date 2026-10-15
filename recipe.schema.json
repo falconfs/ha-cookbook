@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grayskull.local/cookbook/recipe.schema.json",
+  "title": "Cookbook Rezept (v6)",
+  "description": "Schema eines einzelnen Rezepts der Cookbook-Karte (v6). Gedacht als Vorlage, um ein Rezept – auch mit Hilfe einer KI – auszufüllen. Systemfelder wie id, dateCreated, dateModified, @context und _ha_* werden von Home Assistant/der Karte gesetzt und müssen NICHT von einer KI ausgefüllt werden. Alle Zutatenwerte (name, amount, unit, note) sind Strings; leere Werte sind \"\".",
+  "type": "object",
+  "required": ["name", "recipeInstructions"],
+  "additionalProperties": true,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Titel des Rezepts. Pflichtfeld, darf nicht leer sein.",
+      "examples": ["Asiatischer Nudelsalat mit Erdnusssauce"]
+    },
+    "description": {
+      "type": "string",
+      "description": "Kurze Beschreibung des Gerichts (kann leer sein).",
+      "examples": ["Frischer Thai-Nudelsalat mit knackigem Gemüse und würzigem Erdnuss-Dressing."]
+    },
+    "recipeCategory": {
+      "type": "string",
+      "description": "Eine einzelne Kategorie als Freitext (z. B. Salat, Hauptgericht, Dessert). Kann leer sein.",
+      "examples": ["Salat", "Hauptgericht", "Dessert", "Suppe"]
+    },
+    "keywords": {
+      "type": "string",
+      "description": "Tags als KOMMA-getrennter String (KEIN Array!). Einzelne Tags durch Komma trennen, ohne Leerzeichen nach dem Komma ist ok.",
+      "examples": ["Salat,Thai,Erdnuss,vegetarisch"]
+    },
+    "recipeYield": {
+      "type": ["integer", "null"],
+      "description": "Anzahl der Portionen als ganze Zahl. null, wenn keine Angabe.",
+      "examples": [4, 2, null]
+    },
+    "recipeInstructions": {
+      "type": "array",
+      "description": "Die Zubereitung – die einzige Quelle für Schritte UND Zutaten. Eine geordnete Liste von Schritten. Die Reihenfolge ist wichtig. Ein Rezept ohne Schritte hat eine leere Liste [].",
+      "items": {
+        "type": "object",
+        "required": ["instruction", "ingredients"],
+        "additionalProperties": false,
+        "properties": {
+          "instruction": {
+            "type": "string",
+            "description": "Anweisungstext dieses Schritts.",
+            "examples": ["Die Nudeln in Salzwasser nach Packungsanweisung al dente kochen."]
+          },
+          "ingredients": {
+            "type": "array",
+            "description": "Die in DIESEM Schritt verwendeten Zutaten. Kann leer sein [] (z. B. reine Hinweis-/Servierschritte). Jede Zutat gehört zu genau einem Schritt.",
+            "items": {
+              "type": "object",
+              "required": ["name", "amount", "unit", "note"],
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Name der Zutat OHNE Menge/Einheit und ohne die erste Klammer-Notiz.",
+                  "examples": ["Nudeln", "Tomaten in Stücken", "Frühlingszwiebeln"]
+                },
+                "amount": {
+                  "type": "string",
+                  "description": "Führende Menge als String: Zahl (\"120\"), Bereich (\"1-2\") oder \"ca. 5\". \"\" wenn keine Menge.",
+                  "examples": ["120", "1-2", "ca. 5", ""]
+                },
+                "unit": {
+                  "type": "string",
+                  "description": "Nur eine anerkannte Koch-Einheit (z. B. g, kg, ml, l, EL, TL, Dose(n), Pck., Glas, Stiel(e), Bund, Prise). \"\" wenn keine Einheit. Nicht-Einheiten wie \"Rezept\" gehören NICHT hierher.",
+                  "examples": ["g", "ml", "EL", "TL", "Dose", "Bund", "Prise", ""]
+                },
+                "note": {
+                  "type": "string",
+                  "description": "Zusatzhinweis zur Zutat (üblicherweise der Inhalt der ersten Klammer der Originalzeile, ohne Klammern). \"\" wenn keine Notiz.",
+                  "examples": ["gehobelt", "fein gewürfelt", "à 400 g", ""]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "prepTime": {
+      "type": ["string", "null"],
+      "description": "Vorbereitungszeit als ISO-8601-Dauer (z. B. PT0H10M0S für 10 Minuten). null, wenn keine Angabe.",
+      "examples": ["PT0H10M0S", "PT1H30M", null]
+    },
+    "cookTime": {
+      "type": ["string", "null"],
+      "description": "Kochzeit als ISO-8601-Dauer. null, wenn keine Angabe.",
+      "examples": ["PT0H20M0S", "PT3H0M", null]
+    },
+    "totalTime": {
+      "type": ["string", "null"],
+      "description": "Gesamtzeit als ISO-8601-Dauer. null, wenn keine Angabe.",
+      "examples": ["PT0H30M0S", "PT3H30M", null]
+    },
+    "tool": {
+      "type": "array",
+      "description": "Liste benötigter Küchenwerkzeuge als Strings. Leer [], wenn keine.",
+      "items": { "type": "string" },
+      "examples": [["Schmortopf", "Holzlöffel"]]
+    },
+    "nutrition": {
+      "type": "object",
+      "description": "Nährwerte (schema.org NutritionInformation). Alle Werte sind Strings, wenn angegeben. Felder sind optional.",
+      "additionalProperties": true,
+      "properties": {
+        "@type": { "type": "string", "const": "NutritionInformation" },
+        "servingSize": { "type": "string", "description": "Bezugsmenge, z. B. \"1 Portion\".", "examples": ["1 Portion"] },
+        "calories": { "type": ["string", "number"], "description": "Kalorien, z. B. \"420 kcal\".", "examples": ["420 kcal"] },
+        "carbohydrateContent": { "type": ["string", "number"], "description": "Kohlenhydrate, z. B. \"22 g\".", "examples": ["22 g"] },
+        "proteinContent": { "type": ["string", "number"], "description": "Eiweiß, z. B. \"12 g\".", "examples": ["12 g"] },
+        "fatContent": { "type": ["string", "number"], "description": "Fett, z. B. \"7 g\".", "examples": ["7 g"] },
+        "saturatedFatContent": { "type": ["string", "number"], "description": "Gesättigte Fettsäuren." },
+        "sugarContent": { "type": ["string", "number"], "description": "Zucker." },
+        "cholesterolContent": { "type": ["string", "number"], "description": "Cholesterin." }
+      }
+    },
+    "image": {
+      "type": "string",
+      "description": "Quell-Bild-URL des Rezepts (http/https) oder \"\". Das lokale Bild wird von der Karte separat verwaltet; hier genügt eine URL, von der das Bild geladen werden kann.",
+      "examples": ["https://example.com/bild.jpg", ""]
+    },
+    "url": {
+      "type": "string",
+      "description": "Quell-URL des Original-Rezepts (http/https) oder \"\".",
+      "examples": ["https://example.com/rezept", ""]
+    },
+    "recipeCuisine": {
+      "type": ["string", "array"],
+      "description": "Küche/Länderküche als String oder Liste von Strings (optional).",
+      "items": { "type": "string" },
+      "examples": ["Italienisch", ["Asiatisch", "Thailändisch"]]
+    },
+    "author": {
+      "type": "object",
+      "description": "Autor (schema.org Person), optional.",
+      "additionalProperties": true,
+      "properties": {
+        "@type": { "type": "string", "const": "Person" },
+        "name": { "type": "string", "examples": ["Bianca Zapatka"] }
+      }
+    },
+    "publisher": {
+      "type": "object",
+      "description": "Herausgeber (schema.org Organization), optional.",
+      "additionalProperties": true,
+      "properties": {
+        "@type": { "type": "string", "const": "Organization" },
+        "name": { "type": "string", "examples": ["Chefkoch"] }
+      }
+    },
+    "aggregateRating": {
+      "type": "object",
+      "description": "Bewertung der Originalquelle (schema.org AggregateRating), optional. Werte sind Strings.",
+      "additionalProperties": true,
+      "properties": {
+        "@type": { "type": "string", "const": "AggregateRating" },
+        "ratingValue": { "type": "string", "description": "Durchschnittsbewertung als String.", "examples": ["4.93"] },
+        "ratingCount": { "type": "string", "description": "Anzahl Bewertungen als String.", "examples": ["26"] },
+        "reviewCount": { "type": "string", "description": "Anzahl Reviews als String.", "examples": ["8"] }
+      }
+    },
+    "datePublished": {
+      "type": ["string", "null"],
+      "description": "Veröffentlichungsdatum (ISO-8601) oder null. Optional.",
+      "examples": ["2021-03-23T13:24:33+00:00", null]
+    },
+
+    "id": {
+      "type": "string",
+      "description": "SYSTEMFELD – wird beim Speichern von Home Assistant vergeben. Beim Anlegen weglassen; beim Bearbeiten unverändert lassen.",
+      "examples": ["1852"]
+    },
+    "@context": {
+      "type": "string",
+      "description": "SYSTEMFELD – konstant \"http://schema.org\". Nicht ändern.",
+      "const": "http://schema.org"
+    },
+    "@type": {
+      "type": "string",
+      "description": "SYSTEMFELD – konstant \"Recipe\". Nicht ändern.",
+      "const": "Recipe"
+    },
+    "dateCreated": {
+      "type": "string",
+      "description": "SYSTEMFELD – Erstelldatum (ISO-8601), wird vom System gesetzt.",
+      "examples": ["2025-03-30T21:42:24+00:00"]
+    },
+    "dateModified": {
+      "type": "string",
+      "description": "SYSTEMFELD – Änderungsdatum (ISO-8601), wird vom System gesetzt.",
+      "examples": ["2025-03-30T21:42:24+00:00"]
+    },
+    "_ha_rating": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5,
+      "description": "SYSTEMFELD (Home Assistant) – eigene Sternebewertung 0–5, in der Karte gesetzt.",
+      "examples": [4]
+    },
+    "_ha_last_cooked": {
+      "type": ["string", "null"],
+      "description": "SYSTEMFELD (Home Assistant) – Datum des letzten Kochens (\"YYYY-MM-DD\") oder null, per \"Heute gekocht\" gesetzt.",
+      "examples": ["2026-08-11", null]
+    }
+  },
+  "examples": [
+    {
+      "name": "Asiatischer Nudelsalat mit Erdnusssauce",
+      "description": "Frischer Thai-Nudelsalat mit knackigem Gemüse und würzigem Erdnuss-Dressing.",
+      "recipeCategory": "Salat",
+      "keywords": "Salat,Thai,Erdnuss,vegetarisch",
+      "recipeYield": 4,
+      "prepTime": "PT0H10M0S",
+      "cookTime": "PT0H10M0S",
+      "totalTime": null,
+      "tool": ["Topf", "Schüssel"],
+      "image": "https://example.com/nudelsalat.jpg",
+      "url": "https://example.com/nudelsalat",
+      "recipeCuisine": ["Asiatisch", "Thailändisch"],
+      "nutrition": { "@type": "NutritionInformation", "servingSize": "1 Portion" },
+      "recipeInstructions": [
+        {
+          "instruction": "Die Nudeln in Salzwasser al dente kochen und abschrecken.",
+          "ingredients": [
+            { "name": "Nudeln", "amount": "120", "unit": "g", "note": "" }
+          ]
+        },
+        {
+          "instruction": "Gemüse schneiden und mit den Nudeln vermengen.",
+          "ingredients": [
+            { "name": "Karotte", "amount": "1", "unit": "", "note": "in Stifte geschnitten" },
+            { "name": "Frühlingszwiebeln", "amount": "30", "unit": "g", "note": "in Ringe geschnitten" }
+          ]
+        },
+        {
+          "instruction": "Mit der Erdnusssauce übergießen und servieren.",
+          "ingredients": []
+        }
+      ]
+    }
+  ]
+}

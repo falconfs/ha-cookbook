@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cookbook Card Local Preview</title>
+    <style>
+      body { margin: 0; padding: 24px; background: #111827; color: #f9fafb; font-family: system-ui, sans-serif; }
+      main { display: grid; gap: 24px; max-width: 1440px; margin: 0 auto; }
+      section { display: grid; gap: 8px; }
+      h1 { margin: 0; font-size: 1.25rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section><h1>Cookbook grid</h1><cookbook-card></cookbook-card></section>
+      <section><h1>Random recipe</h1><cookbook-random-card></cookbook-random-card></section>
+      <section><h1>Weekly calendar</h1><cookbook-weekly-calendar></cookbook-weekly-calendar></section>
+    </main>
+    <script type="module">
+      await import('./custom_components/cookbook/frontend/cookbook-card.js');
+      const card = document.querySelector('cookbook-card');
+      const randomCard = document.querySelector('cookbook-random-card');
+      const calendarCard = document.querySelector('cookbook-weekly-calendar');
+      const previewLanguage = new URLSearchParams(location.search).get('lang') || 'auto';
+      document.documentElement.lang = previewLanguage === 'auto' ? 'de' : previewLanguage;
+      const hass = {
+        locale: { language: 'de' },
+        config: { time_zone: 'Europe/Berlin' },
+        states: {},
+        callWS: async message => {
+          const response = await fetch('/api/local/service', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(message),
+          });
+          return { response: await response.json() };
+        },
+      };
+      card.setConfig({ columns_mobile: 1, columns_tablet: 2, columns_desktop: 3, default_sort: 'date-desc', recipe_default_tab: 'ingredients', language: previewLanguage });
+      randomCard.setConfig({ duration: '1s', language: previewLanguage });
+      calendarCard.setConfig({ week_start: 'monday', show_images: true, layout: 'normal', language: previewLanguage });
+      card.hass = hass;
+      randomCard.hass = hass;
+      calendarCard.hass = hass;
+    </script>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "domain": "cookbook",
+  "name": "Cookbook",
+  "version": "1.0.0",
+  "config_flow": true,
+  "integration_type": "service",
+  "after_dependencies": ["frontend"],
+  "documentation": "https://github.com/falconfs/ha-cookbook",
+  "issue_tracker": "https://github.com/falconfs/ha-cookbook/issues",
+  "codeowners": ["@falconfs"]
+}

@@ -1,0 +1,10 @@
+node_modules/
+.DS_Store
+.idea/
+__pycache__/
+.pytest_cache/
+.coverage
+
+# HA-checkout planning history copied only for local migration context.
+docs/planings/
+/.idea

@@ -1,0 +1,117 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Cookbook",
+        "description": "Set up the local recipe manager and dashboard cards."
+      }
+    }
+  },
+  "services": {
+    "list_recipes": {
+      "name": "List recipes",
+      "description": "Return recipe summaries from local storage."
+    },
+    "get_meal_plan": {
+      "name": "Get meal plan",
+      "description": "Return the weekly meal plan, global slots, and plan entries."
+    },
+    "add_meal_plan_entry": {
+      "name": "Add meal plan entry",
+      "description": "Add a recipe or free-text item to a day and slot.",
+      "fields": {
+        "date": { "name": "Date", "description": "Local calendar date in YYYY-MM-DD format." },
+        "slot_id": { "name": "Slot ID", "description": "Target built-in or custom slot ID." },
+        "recipe_id": { "name": "Recipe ID", "description": "Optional recipe to plan." },
+        "text": { "name": "Text or note", "description": "Free-text entry, or an optional note beside a recipe." }
+      }
+    },
+    "update_meal_plan_entry": {
+      "name": "Update meal plan entry",
+      "description": "Change the date, slot, recipe, or text of an existing entry.",
+      "fields": {
+        "entry_id": { "name": "Entry ID" },
+        "date": { "name": "Date", "description": "Local calendar date in YYYY-MM-DD format." },
+        "slot_id": { "name": "Slot ID" },
+        "recipe_id": { "name": "Recipe ID", "description": "Optional recipe to plan." },
+        "text": { "name": "Text or note", "description": "Free-text entry, or an optional note beside a recipe." }
+      }
+    },
+    "delete_meal_plan_entry": {
+      "name": "Delete meal plan entry",
+      "description": "Delete a plan entry without affecting the recipe.",
+      "fields": {
+        "entry_id": { "name": "Entry ID" }
+      }
+    },
+    "save_meal_plan_slots": {
+      "name": "Save meal plan slots",
+      "description": "Replace the global slot configuration. Entries in removed custom slots are reassigned.",
+      "fields": {
+        "slots": { "name": "Slots", "description": "Complete ordered slot configuration." }
+      }
+    },
+    "get_recipe": {
+      "name": "Get recipe",
+      "description": "Return one recipe from local storage.",
+      "fields": {
+        "recipe_id": { "name": "Recipe ID" }
+      }
+    },
+    "upsert_recipe": {
+      "name": "Save recipe",
+      "description": "Create or replace a recipe in local storage.",
+      "fields": {
+        "recipe_id": { "name": "Recipe ID", "description": "Leave empty to create a new recipe." },
+        "recipe": { "name": "Recipe", "description": "Complete v6 recipe document." },
+        "tmp_image_token": { "name": "Temporary image token", "description": "Token of a staged image to attach to the recipe." },
+        "remove_image": { "name": "Remove image", "description": "Remove the stored image when saving." }
+      }
+    },
+    "delete_recipe": {
+      "name": "Delete recipe",
+      "description": "Delete one recipe from local storage.",
+      "fields": {
+        "recipe_id": { "name": "Recipe ID" }
+      }
+    },
+    "fetch_image_from_url": {
+      "name": "Fetch recipe image",
+      "description": "Download and store an image for a recipe.",
+      "fields": {
+        "recipe_id": { "name": "Recipe ID" },
+        "image_url": { "name": "Image URL" }
+      }
+    },
+    "fetch_image_to_tmp": {
+      "name": "Stage image from URL",
+      "description": "Download an image to temporary storage and return a token.",
+      "fields": {
+        "image_url": { "name": "Image URL" }
+      }
+    },
+    "import_recipe_from_url": {
+      "name": "Import recipe from URL",
+      "description": "Extract a recipe from schema.org JSON-LD or microdata and return a draft for review.",
+      "fields": {
+        "url": { "name": "Recipe URL" }
+      }
+    },
+    "ai_import_recipe_from_url": {
+      "name": "Import recipe with AI",
+      "description": "Use Home Assistant AI Task to extract a recipe draft from a web page.",
+      "fields": {
+        "url": { "name": "Recipe URL" },
+        "ai_task_entity": { "name": "AI Task entity", "description": "Optional entity ID; defaults to the preferred entity." }
+      }
+    },
+    "ai_regroup_recipe": {
+      "name": "Group recipe ingredients with AI",
+      "description": "Ask AI to assign ingredients to the steps where they are first used.",
+      "fields": {
+        "recipe": { "name": "Recipe", "description": "Recipe draft to regroup." },
+        "ai_task_entity": { "name": "AI Task entity", "description": "Optional entity ID; defaults to the preferred entity." }
+      }
+    }
+  }
+}
