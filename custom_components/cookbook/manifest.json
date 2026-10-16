@@ -1,13 +1,13 @@
 {
   "domain": "cookbook",
   "name": "Cookbook",
-  "version": "1.0.0",
-  "config_flow": true,
-  "integration_type": "service",
-  "dependencies": ["http"],
   "after_dependencies": ["frontend"],
-  "iot_class": "calculated",
+  "codeowners": ["@falconfs"],
+  "config_flow": true,
+  "dependencies": ["http"],
   "documentation": "https://github.com/falconfs/ha-cookbook",
+  "integration_type": "service",
+  "iot_class": "calculated",
   "issue_tracker": "https://github.com/falconfs/ha-cookbook/issues",
-  "codeowners": ["@falconfs"]
+  "version": "1.0.0"
 }

@@ -15,5 +15,13 @@ def test_manifest_declares_calculated_class_and_http_dependency():
     assert "frontend" in manifest["after_dependencies"]
 
 
+def test_manifest_keys_are_sorted_after_domain_and_name():
+    manifest = json.loads((INTEGRATION_PATH / "manifest.json").read_text())
+    keys = list(manifest)
+
+    assert keys[:2] == ["domain", "name"]
+    assert keys[2:] == sorted(keys[2:])
+
+
 def test_yaml_schema_restricts_setup_to_config_entries():
     assert callable(CONFIG_SCHEMA)
