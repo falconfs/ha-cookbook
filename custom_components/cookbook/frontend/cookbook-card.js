@@ -813,6 +813,13 @@ function injectMetroShadowStyles(shadowRoot) {
   color: var(--metro-text-muted);
 }
 
+.metro-form-import__hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--metro-text-muted);
+  line-height: 1.35;
+}
+
 .metro-form-import__status--error {
   color: var(--metro-danger);
 }

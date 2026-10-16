@@ -784,6 +784,11 @@ export class RecipeEditor {
     row.append(input, button, aiButton);
     section.appendChild(row);
 
+    const fallbackNotice = document.createElement('p');
+    fallbackNotice.className = 'metro-form-import__hint';
+    fallbackNotice.textContent = this._t('ai_auto_fallback_notice');
+    section.appendChild(fallbackNotice);
+
     const status = document.createElement('div');
     status.className = 'metro-form-import__status';
     status.setAttribute('role', 'status');
@@ -806,7 +811,8 @@ export class RecipeEditor {
     this._importStatus = { text: this._t('importing'), error: false };
     this._render();
     try {
-      const draft = await this._api.importRecipeFromUrl(url);
+      const result = await this._api.importRecipeFromUrl(url, this._aiTaskEntity);
+      const draft = result.recipe;
       // Merge the imported draft into the form for review; nothing is saved yet.
       this._state = formStateFromRecipe(draft, 'add');
       // Stage the recipe image into the tmp area so it is attached on save.
@@ -827,7 +833,8 @@ export class RecipeEditor {
           // Ignore: recipe is still importable without the image.
         }
       }
-      this._importStatus = { text: this._t('import_success'), error: false };
+      const successKey = result.import_method === 'ai' ? 'ai_import_success' : 'import_success';
+      this._importStatus = { text: this._t(successKey), error: false };
     } catch (error) {
       this._importStatus = {
         text: error instanceof Error ? error.message : this._t('import_error'),
@@ -837,8 +844,7 @@ export class RecipeEditor {
     this._render();
   }
 
-  /** AI fallback: extract the recipe from the URL via ai_task when the native
-   *  parser found nothing. Stages the image like the native import. */
+  /** Directly import a recipe from the URL via ai_task. */
   async _aiFallbackImport() {
     const url = (this._importUrl || '').trim();
     if (!url) {

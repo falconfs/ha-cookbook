@@ -163,8 +163,16 @@ runtime modules. Run `npm run validate` against `../../cookbook_v6` and run
 `cookbook.import_recipe_from_url` downloads a page server-side (browser-like
 headers, DNS-level SSRF re-check), extracts a schema.org recipe (JSON-LD first,
 then microdata — Nextcloud Cookbook v0.11.9 parity re-implemented in Python
-with the stdlib `html.parser`), and normalizes it into a v6 draft. The draft is
-shown in the editor for review and is never saved without explicit confirmation.
+with the stdlib `html.parser`, including recipes nested in `WebPage.mainEntity`),
+and normalizes it into a v6 draft. A candidate must contain a name, at least one
+ingredient and at least one instruction. The draft is shown in the editor for
+review and is never saved without explicit confirmation.
+
+If a page downloads successfully but neither JSON-LD nor microdata yields a
+usable draft, the same downloaded HTML is reduced to visible text and sent to
+the configured Home Assistant AI Task. URL validation and download failures do
+not invoke AI. The editor identifies AI-generated imports and discloses that
+page text may be sent to the configured provider and provider costs may apply.
 
 Key normalization rules (all in `url_import.py`, covered by tests):
 
@@ -185,10 +193,11 @@ Key normalization rules (all in `url_import.py`, covered by tests):
 
 ### AI fallback + regroup (feature-07, R4c + R10–R13)
 
-When the native parser finds no markup, `cookbook.ai_import_recipe_from_url`
-reduces the page to visible text and asks `ai_task.generate_data` (structured
-output) to extract a v6 recipe. `cookbook.ai_regroup_recipe` asks the AI to
-reassign already-extracted ingredients to the correct steps. Both:
+The automatic URL-import fallback and the explicit `cookbook.ai_import_recipe_from_url`
+service reduce page content to visible text and ask `ai_task.generate_data`
+(structured output) to extract a v6 recipe. `cookbook.ai_regroup_recipe` asks
+the AI to reassign already-extracted ingredients to the correct steps. These
+flows:
 
 - run through `ai_import.py` (pure, injected AI call);
 - **strictly validate** the AI response against the v6 shape before it is ever
@@ -197,8 +206,9 @@ reassign already-extracted ingredients to the correct steps. Both:
 - never store AI provider credentials in the card (Lovelace config is
   client-readable).
 
-Editor buttons: "Mit KI importieren" (fallback/direct AI import) and "Zutaten
-per KI zuordnen" (regroup).
+The separate "Mit KI importieren" button remains available for a direct AI
+import; the normal URL-import button now falls back automatically when native
+markup is unusable. "Zutaten per KI zuordnen" runs the regroup flow.
 
 ## Random Recipe Card
 

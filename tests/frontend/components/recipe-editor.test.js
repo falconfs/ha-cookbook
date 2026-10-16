@@ -74,6 +74,10 @@ function createApi(overrides = {}) {
   };
 }
 
+function nativeImportResult(recipe) {
+  return { recipe, import_method: 'native' };
+}
+
 async function withDocument(fn) {
   const originalDocument = globalThis.document;
   globalThis.document = createDocument();
@@ -309,7 +313,7 @@ test('imports a recipe from URL into the form state for review', async () => {
       ],
       _cookbook_schema_version: 6,
     };
-    const api = createApi({ importRecipeFromUrl: async () => draft });
+    const api = createApi({ importRecipeFromUrl: async () => nativeImportResult(draft) });
     const editor = new RecipeEditor(new FakeElement('main'), api, () => {});
     await editor.open();
 
@@ -319,6 +323,53 @@ test('imports a recipe from URL into the form state for review', async () => {
     assert.equal(editor._state.name, 'Imported Cake');
     assert.equal(editor._importStatus.error, false);
     assert.equal(editor._state.steps[0].ingredients[0].name, 'Flour');
+  });
+});
+
+test('normal URL import identifies an automatic AI fallback result', async () => {
+  await withDocument(async () => {
+    const draft = {
+      name: 'KI-Lasagne',
+      recipeInstructions: [{ instruction: 'Backen.', ingredients: [] }],
+    };
+    let seenEntity = null;
+    let saveCalls = 0;
+    const api = createApi({
+      importRecipeFromUrl: async (_url, entity) => {
+        seenEntity = entity;
+        return { recipe: draft, import_method: 'ai' };
+      },
+      createRecipe: async () => { saveCalls += 1; return '900'; },
+    });
+    const editor = new RecipeEditor(new FakeElement('main'), api, () => {}, () => {}, {
+      aiTaskEntity: 'ai_task.openai_ai_task',
+      i18n: createI18n({ locale: 'en' }),
+    });
+    await editor.open();
+    editor._importUrl = 'https://example.com/lasagne';
+
+    await editor._importFromUrl();
+
+    assert.equal(editor._state.name, 'KI-Lasagne');
+    assert.equal(editor._importStatus.text, 'Imported with AI. Review the recipe and save it.');
+    assert.equal(seenEntity, 'ai_task.openai_ai_task');
+    assert.equal(saveCalls, 0);
+  });
+});
+
+test('URL import explains the automatic AI fallback and possible provider costs', async () => {
+  await withDocument(async () => {
+    const editor = new RecipeEditor(new FakeElement('main'), createApi(), () => {}, () => {}, {
+      i18n: createI18n({ locale: 'en' }),
+    });
+    await editor.open();
+
+    const notice = editor._urlImportSection().children.find(
+      child => child.className === 'metro-form-import__hint',
+    );
+
+    assert.match(notice.textContent, /sent to your configured AI Task/);
+    assert.match(notice.textContent, /costs may apply/);
   });
 });
 
@@ -415,7 +466,7 @@ test('URL import stages the recipe image so it is saved with the recipe', async 
   await withDocument(async () => {
     let fetchedUrl = null;
     const api = createApi({
-      importRecipeFromUrl: async () => ({
+      importRecipeFromUrl: async () => nativeImportResult({
         name: 'Imported',
         image: 'https://example.test/pic.jpg',
         recipeInstructions: [{ instruction: 'A', ingredients: [] }],
@@ -438,7 +489,7 @@ test('URL import without an image does not call fetchImageToTmp', async () => {
   await withDocument(async () => {
     let called = false;
     const api = createApi({
-      importRecipeFromUrl: async () => ({
+      importRecipeFromUrl: async () => nativeImportResult({
         name: 'Imported',
         image: '',
         recipeInstructions: [{ instruction: 'A', ingredients: [] }],
@@ -458,7 +509,7 @@ test('URL import without an image does not call fetchImageToTmp', async () => {
 test('URL import still succeeds when image staging fails', async () => {
   await withDocument(async () => {
     const api = createApi({
-      importRecipeFromUrl: async () => ({
+      importRecipeFromUrl: async () => nativeImportResult({
         name: 'Imported',
         image: 'https://example.test/pic.jpg',
         recipeInstructions: [{ instruction: 'A', ingredients: [] }],
@@ -480,7 +531,7 @@ test('URL import still succeeds when image staging fails', async () => {
 test('URL import shows the staged image as a preview', async () => {
   await withDocument(async () => {
     const api = createApi({
-      importRecipeFromUrl: async () => ({
+      importRecipeFromUrl: async () => nativeImportResult({
         name: 'Imported', image: 'https://example.test/pic.jpg',
         recipeInstructions: [{ instruction: 'A', ingredients: [] }],
       }),
@@ -501,7 +552,7 @@ test('URL import shows the staged image as a preview', async () => {
 test('URL import clears external image URL from state once staged', async () => {
   await withDocument(async () => {
     const api = createApi({
-      importRecipeFromUrl: async () => ({
+      importRecipeFromUrl: async () => nativeImportResult({
         name: 'Imported', image: 'https://example.test/pic.jpg',
         recipeInstructions: [{ instruction: 'A', ingredients: [] }],
       }),
@@ -521,7 +572,7 @@ test('URL import clears external image URL from state once staged', async () => 
 test('opening a fresh add editor after an import shows no image preview', async () => {
   await withDocument(async () => {
     const api = createApi({
-      importRecipeFromUrl: async () => ({
+      importRecipeFromUrl: async () => nativeImportResult({
         name: 'Imported', image: 'https://example.test/pic.jpg',
         recipeInstructions: [{ instruction: 'A', ingredients: [] }],
       }),

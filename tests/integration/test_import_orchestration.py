@@ -92,6 +92,29 @@ _MICRODATA_HTML = (
 )
 
 _NO_RECIPE_HTML = "<html><body><p>Just a blog post.</p></body></html>"
+_METADATA_RECIPE_HTML = (
+    '<script type="application/ld+json">'
+    '{"@type":"Recipe","@id":"#rating",'
+    '"aggregateRating":{"ratingValue":"5"}}'
+    "</script>"
+)
+_WEBPAGE_MAIN_ENTITY_HTML = (
+    "<html><head>"
+    '<script type="application/ld+json">'
+    '{"@type":"WebPage","mainEntity":{"@type":"Recipe",'
+    '"name":"Gemüse-Lasagne","recipeYield":"4",'
+    '"recipeIngredient":["1 Zucchini","1 Aubergine","200 g Möhren",'
+    '"1 Zwiebel","2 Zehen Knoblauch","15 g Basilikum","2 EL Rapsöl",'
+    '"500 ml passierte Tomaten","Salz","Pfeffer",'
+    '"Paprikapulver edelsüß","150 g Gratinkäse","9 Lasagne-Platten"],'
+    '"recipeInstructions":[{"@type":"HowToStep","text":"Zucchini würfeln."},'
+    '{"@type":"HowToStep","text":"Öl und Gemüse anbraten."},'
+    '{"@type":"HowToStep","text":"Lasagne schichten und backen."}]}}'
+    "</script>"
+    '<script type="application/ld+json">'
+    '{"@type":"Recipe","@id":"#rating","aggregateRating":{"ratingValue":"5"}}'
+    "</script></head><body></body></html>"
+)
 
 
 class TestJsonLdPreferred:
@@ -122,6 +145,22 @@ class TestJsonLdPreferred:
         assert step["ingredients"][0]["amount"] == "250"
         assert step["ingredients"][0]["unit"] == "g"
 
+    def test_imports_complete_recipe_from_webpage_main_entity(self) -> None:
+        draft = _run(
+            import_recipe_draft(
+                "https://www.rewe.de/rezepte/gemuese-lasagne/",
+                session=_FakeSession(body=_WEBPAGE_MAIN_ENTITY_HTML),
+                store=None,
+                resolve=_resolver(),
+            )
+        )
+
+        assert draft["name"] == "Gemüse-Lasagne"
+        assert sum(
+            len(step["ingredients"]) for step in draft["recipeInstructions"]
+        ) == 13
+        assert len(draft["recipeInstructions"]) == 3
+
 
 class TestMicrodataFallback:
     def test_falls_back_to_microdata(self) -> None:
@@ -136,6 +175,25 @@ class TestMicrodataFallback:
         assert draft["name"] == "Microdata Cake"
         assert [i["name"] for i in draft["recipeInstructions"][0]["ingredients"]] == ["Eier"]
 
+    def test_uses_microdata_when_jsonld_candidate_is_incomplete(self) -> None:
+        html = (
+            '<script type="application/ld+json">'
+            '{"@type":"Recipe","name":"Recipe card"}'
+            "</script>"
+            + _MICRODATA_HTML
+        )
+
+        draft = _run(
+            import_recipe_draft(
+                "https://example.com/cake",
+                session=_FakeSession(body=html),
+                store=None,
+                resolve=_resolver(),
+            )
+        )
+
+        assert draft["name"] == "Microdata Cake"
+
 
 class TestNoRecipeFound:
     def test_raises_when_no_markup(self) -> None:
@@ -144,6 +202,17 @@ class TestNoRecipeFound:
                 import_recipe_draft(
                     "https://example.com/blog",
                     session=_FakeSession(body=_NO_RECIPE_HTML),
+                    store=None,
+                    resolve=_resolver(),
+                )
+            )
+
+    def test_rejects_metadata_only_recipe_markup(self) -> None:
+        with pytest.raises(ImportError_):
+            _run(
+                import_recipe_draft(
+                    "https://example.com/blog",
+                    session=_FakeSession(body=_METADATA_RECIPE_HTML),
                     store=None,
                     resolve=_resolver(),
                 )

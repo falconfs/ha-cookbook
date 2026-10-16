@@ -358,13 +358,26 @@ test('importRecipeFromUrl returns the draft recipe from the service', async () =
 
   const result = await api.importRecipeFromUrl('https://example.com/cake');
 
-  assert.deepEqual(result, draft);
+  assert.deepEqual(result, { recipe: draft, import_method: 'native' });
   assert.deepEqual(calls[0], {
     type: 'call_service',
     domain: 'cookbook',
     service: 'import_recipe_from_url',
     service_data: { url: 'https://example.com/cake' },
     return_response: true,
+  });
+});
+
+test('importRecipeFromUrl returns the import method and passes the configured AI Task entity', async () => {
+  const draft = { name: 'Imported with AI', _cookbook_schema_version: 6 };
+  const { api, calls } = createApi([{ response: { recipe: draft, import_method: 'ai' } }]);
+
+  const result = await api.importRecipeFromUrl('https://example.com/cake', 'ai_task.test');
+
+  assert.deepEqual(result, { recipe: draft, import_method: 'ai' });
+  assert.deepEqual(calls[0].service_data, {
+    url: 'https://example.com/cake',
+    ai_task_entity: 'ai_task.test',
   });
 });
 

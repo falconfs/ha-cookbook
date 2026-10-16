@@ -127,3 +127,50 @@ class TestGraphAsObject:
         recipe = extract_jsonld_recipe(html)
         assert recipe is not None
         assert recipe["name"] == "Shirazi Salat"
+
+
+class TestWebPageMainEntity:
+    def test_complete_main_entity_wins_over_metadata_only_recipe(self) -> None:
+        html = (
+            "<html><head>"
+            '<script type="application/ld+json">'
+            '{"@type":"WebPage","mainEntity":{"@type":"Recipe",'
+            '"name":"Gemüse-Lasagne","recipeIngredient":["1 Zucchini"],'
+            '"recipeInstructions":[{"@type":"HowToStep","text":"Würfeln."}]}}'
+            "</script>"
+            '<script type="application/ld+json">'
+            '{"@type":"Recipe","@id":"#rating","aggregateRating":{"ratingValue":"5"}}'
+            "</script></head><body></body></html>"
+        )
+
+        recipe = extract_jsonld_recipe(html)
+
+        assert recipe is not None
+        assert recipe["name"] == "Gemüse-Lasagne"
+        assert recipe["recipeIngredient"] == ["1 Zucchini"]
+
+    def test_metadata_only_recipe_is_not_selected(self) -> None:
+        html = _html_with_jsonld(
+            '{"@type":"Recipe","@id":"#rating",'
+            '"aggregateRating":{"ratingValue":"5"}}'
+        )
+
+        assert extract_jsonld_recipe(html) is None
+
+    def test_complete_recipe_in_later_block_wins_over_named_partial_recipe(self) -> None:
+        html = (
+            "<html><head>"
+            '<script type="application/ld+json">'
+            '{"@type":"Recipe","name":"Recipe card"}'
+            "</script>"
+            '<script type="application/ld+json">'
+            '{"@type":"Recipe","name":"Full recipe",'
+            '"recipeIngredient":["1 carrot"],'
+            '"recipeInstructions":["Chop the carrot."]}'
+            "</script></head><body></body></html>"
+        )
+
+        recipe = extract_jsonld_recipe(html)
+
+        assert recipe is not None
+        assert recipe["name"] == "Full recipe"

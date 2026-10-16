@@ -20,7 +20,7 @@ from .url_import import (
     UrlValidationError,
     download_html,
     extract_visible_text,
-    import_recipe_draft,
+    parse_recipe_html,
 )
 from .ai_import import (
     AiImportError,
@@ -123,25 +123,23 @@ def register_services(
         return {"ok": True, "token": token, "image_ext": result}
 
     async def import_recipe_from_url(call: ServiceCall) -> ServiceResponse:
-        """Import a recipe URL into a v6 draft for editor review.
-
-        Thin wrapper over the tested, HA-independent import_recipe_draft
-        orchestrator. Returns {"recipe": draft} on success or {"error": msg}
-        with a non-technical message on any failure. Never saves a recipe;
-        the card persists only after explicit user confirmation.
-        """
+        """Import a recipe natively, using AI only when markup is unusable."""
+        url = str(call.data["url"])
+        entity_id = call.data.get("ai_task_entity")
         session = _get_image_session(hass)
         try:
-            draft = await import_recipe_draft(
-                str(call.data["url"]), session=session, store=None
-            )
+            html = await download_html(url, session=session)
         except UrlValidationError:
             return _error_response("This URL cannot be imported.", "import_url_invalid")
         except DownloadError:
             return _error_response("The page could not be downloaded.", "page_download_failed")
+
+        try:
+            draft = parse_recipe_html(html, source_url=url)
         except RecipeImportError:
-            return _error_response("No recipe was found on this page.", "recipe_markup_missing")
-        return {"recipe": draft}
+            return await _ai_import_response(html, url, entity_id)
+
+        return {"recipe": draft, "import_method": "native"}
 
     def _make_ai_generate(entity_id: str | None):
         """Return an async (instructions, structure) -> dict calling ai_task.
@@ -169,11 +167,29 @@ def register_services(
 
         return generate
 
-    async def ai_import_recipe_from_url(call: ServiceCall) -> ServiceResponse:
-        """AI fallback: download a page, reduce to text, extract a v6 draft.
+    async def _ai_import_response(
+        html: str, url: str, entity_id: str | None
+    ) -> ServiceResponse:
+        try:
+            draft = await ai_import_draft(
+                extract_visible_text(html),
+                source_url=url,
+                generate=_make_ai_generate(entity_id),
+            )
+        except AiImportError:
+            return _error_response(
+                "The AI could not extract a valid recipe.", "ai_recipe_invalid"
+            )
+        except Exception:  # noqa: BLE001 - normalize AI/transport failures
+            return _error_response("The AI request failed.", "ai_request_failed")
+        return {"recipe": draft, "import_method": "ai"}
 
-        Used when the native parser finds no markup. Never saves; returns
-        {"recipe": draft} or {"error": msg}.
+    async def ai_import_recipe_from_url(call: ServiceCall) -> ServiceResponse:
+        """Direct AI URL import for users who explicitly choose the AI action.
+
+        The regular URL import also invokes the same AI pipeline automatically
+        when native markup is unusable. This service remains a direct option.
+        It never saves; it returns a draft for review.
         """
         url = str(call.data["url"])
         entity_id = call.data.get("ai_task_entity")
@@ -184,16 +200,7 @@ def register_services(
             return _error_response("This URL cannot be imported.", "import_url_invalid")
         except DownloadError:
             return _error_response("The page could not be downloaded.", "page_download_failed")
-        text = extract_visible_text(html)
-        try:
-            draft = await ai_import_draft(
-                text, source_url=url, generate=_make_ai_generate(entity_id)
-            )
-        except AiImportError:
-            return _error_response("The AI could not extract a valid recipe.", "ai_recipe_invalid")
-        except Exception:  # noqa: BLE001 - surface AI/transport issues uniformly
-            return _error_response("The AI request failed.", "ai_request_failed")
-        return {"recipe": draft}
+        return await _ai_import_response(html, url, entity_id)
 
     async def ai_regroup_recipe(call: ServiceCall) -> ServiceResponse:
         """AI improvement: re-group an existing recipe's ingredients to steps.
@@ -339,7 +346,10 @@ def register_services(
         DOMAIN,
         "import_recipe_from_url",
         import_recipe_from_url,
-        schema=vol.Schema({vol.Required("url"): str}),
+        schema=vol.Schema({
+            vol.Required("url"): str,
+            vol.Optional("ai_task_entity"): str,
+        }),
         supports_response=SupportsResponse.ONLY,
     )
     hass.services.async_register(
