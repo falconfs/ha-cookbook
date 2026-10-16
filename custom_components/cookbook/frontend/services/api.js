@@ -203,17 +203,23 @@ export class CookbookApi {
    * Import a recipe from a URL into a v6 draft for editor review.
    * Does not save; the caller persists after user confirmation.
    * @param {string} url
-   * @returns {Promise<object>} the normalized draft recipe
+   * @param {string} [aiTaskEntity] optional preferred AI Task entity id
+   * @returns {Promise<{recipe: object, import_method: string}>} the draft and its source
    */
-  async importRecipeFromUrl(url) {
-    const response = await this._callWS('import_recipe_from_url', { url });
+  async importRecipeFromUrl(url, aiTaskEntity) {
+    const serviceData = { url };
+    if (aiTaskEntity) serviceData.ai_task_entity = aiTaskEntity;
+    const response = await this._callWS('import_recipe_from_url', serviceData);
     if (response?.error) throw new Error(this._errorMessage(response, 'errors.import_response_invalid'));
     if (!response?.recipe) throw new Error(this._i18n.t('errors.import_response_invalid'));
-    return response.recipe;
+    return {
+      recipe: response.recipe,
+      import_method: response.import_method === 'ai' ? 'ai' : 'native',
+    };
   }
 
   /**
-   * AI fallback import: extract a v6 draft from a page via ai_task.
+   * Direct AI import: extract a v6 draft from a page via ai_task.
    * @param {string} url
    * @param {string} [aiTaskEntity] optional preferred AI Task entity id
    * @returns {Promise<object>} the normalized draft recipe

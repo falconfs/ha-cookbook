@@ -143,38 +143,54 @@ def _type_matches_recipe(node: Any) -> bool:
     return False
 
 
-def _find_recipe(node: Any) -> dict[str, Any] | None:
-    """Return the first Recipe dict found within a parsed JSON-LD value."""
+def _recipe_candidates(node: Any) -> list[dict[str, Any]]:
+    """Return Recipe nodes from arrays, @graph and WebPage.mainEntity."""
     if isinstance(node, dict):
-        if _type_matches_recipe(node):
-            return node
-        graph = node.get("@graph")
-        if isinstance(graph, list):
-            return _find_recipe(graph)
-        # Some sites emit @graph as an object keyed by numeric strings
-        # ({"0": {...}, "7": {...}}) instead of a JSON array.
-        if isinstance(graph, dict):
-            return _find_recipe(list(graph.values()))
-        return None
+        candidates = [node] if _type_matches_recipe(node) else []
+        for key in ("@graph", "mainEntity"):
+            nested = node.get(key)
+            if isinstance(nested, dict) and key == "@graph":
+                nested = list(nested.values())
+            candidates.extend(_recipe_candidates(nested))
+        return candidates
     if isinstance(node, list):
-        for item in node:
-            found = _find_recipe(item)
-            if found is not None:
-                return found
+        return [candidate for item in node for candidate in _recipe_candidates(item)]
+    return []
+
+
+def _has_usable_recipe_markup(recipe: dict[str, Any]) -> bool:
+    """Return whether a JSON-LD node has the minimum recipe content."""
+    return bool(
+        _as_text(recipe.get("name"))
+        and _normalize_ingredient_list(recipe.get("recipeIngredient"))
+        and _collect_step_texts(recipe.get("recipeInstructions"))
+    )
+
+
+def _find_recipe(node: Any) -> dict[str, Any] | None:
+    """Prefer complete Recipe nodes; otherwise return the first named node."""
+    candidates = _recipe_candidates(node)
+    for candidate in candidates:
+        if _has_usable_recipe_markup(candidate):
+            return candidate
+    for candidate in candidates:
+        if _as_text(candidate.get("name")):
+            return candidate
     return None
 
 
 def extract_jsonld_recipe(html: str) -> dict[str, Any] | None:
     """Extract the first schema.org Recipe from JSON-LD in an HTML document.
 
-    Supports a direct Recipe object, an array of objects and an ``@graph``
-    container, matching the upstream Nextcloud Cookbook order. The first Recipe
-    encountered (per block, blocks in document order) wins. Malformed JSON in a
-    block is ignored and does not hide a valid Recipe in another block. Returns
-    ``None`` when no Recipe is present.
+    Supports direct Recipe objects, arrays, ``@graph`` containers and recipes
+    nested in ``WebPage.mainEntity``. Complete recipes are preferred across all
+    script blocks; if none exists, the first named candidate is returned so the
+    caller can reject it as unusable. Malformed JSON in one block does not hide
+    a usable Recipe in another block.
     """
     collector = _JsonLdCollector()
     collector.feed(html)
+    named_fallback = None
     for block in collector.blocks:
         text = block.strip()
         if not text:
@@ -184,9 +200,13 @@ def extract_jsonld_recipe(html: str) -> dict[str, Any] | None:
         except (ValueError, TypeError):
             continue
         recipe = _find_recipe(parsed)
-        if recipe is not None:
+        if recipe is None:
+            continue
+        if _has_usable_recipe_markup(recipe):
             return recipe
-    return None
+        if named_fallback is None:
+            named_fallback = recipe
+    return named_fallback
 
 
 def _as_text(value: Any) -> str:
@@ -805,7 +825,42 @@ async def download_html(url: str, *, session, resolve=None) -> str:
 # --- Import orchestration (HA-independent) -----------------------------------
 
 class RecipeImportError(RuntimeError):
-    """Raised when a page was downloaded but no supported recipe was found."""
+    """Raised when downloaded HTML has no usable supported recipe."""
+
+
+def _has_usable_recipe_draft(draft: dict[str, Any]) -> bool:
+    name = draft.get("name")
+    steps = draft.get("recipeInstructions")
+    if not isinstance(name, str) or not name.strip() or not isinstance(steps, list):
+        return False
+
+    has_instruction = any(
+        isinstance(step, dict)
+        and isinstance(step.get("instruction"), str)
+        and step["instruction"].strip()
+        for step in steps
+    )
+    has_ingredient = any(
+        isinstance(ingredient, dict)
+        and isinstance(ingredient.get("name"), str)
+        and ingredient["name"].strip()
+        for step in steps
+        if isinstance(step, dict) and isinstance(step.get("ingredients"), list)
+        for ingredient in step["ingredients"]
+    )
+    return has_instruction and has_ingredient
+
+
+def parse_recipe_html(html: str, *, source_url: str) -> dict[str, Any]:
+    """Extract and normalize a usable recipe from already-downloaded HTML."""
+    for extractor in (extract_jsonld_recipe, extract_microdata_recipe):
+        source = extractor(html)
+        if source is None:
+            continue
+        draft = normalize_to_v6(source, source_url=source_url)
+        if _has_usable_recipe_draft(draft):
+            return draft
+    raise RecipeImportError("No usable recipe markup was found")
 
 
 async def import_recipe_draft(
@@ -818,9 +873,8 @@ async def import_recipe_draft(
 ) -> dict[str, Any]:
     """Import a recipe URL into a v6 draft, ready for editor review.
 
-    Chains the pure building blocks so the HA service is a thin wrapper:
-    validate + DNS-SSRF re-check + download -> JSON-LD -> Microdata fallback ->
-    normalize_to_v6. On success, and only when a store and recipe_id are given,
+    Downloads and validates the page, then parses JSON-LD or Microdata into a
+    usable v6 draft. On success, and only when a store and recipe_id are given,
     the raw HTML is persisted as import.html for audit.
 
     Args:
@@ -833,19 +887,11 @@ async def import_recipe_draft(
     Raises:
         UrlValidationError: invalid/blocked URL or DNS target.
         DownloadError: non-2xx response or network error.
-        RecipeImportError: no JSON-LD or microdata recipe found.
+        RecipeImportError: no usable JSON-LD or microdata recipe found.
     """
     html = await download_html(url, session=session, resolve=resolve)
 
-    source = extract_jsonld_recipe(html)
-    if source is None:
-        source = extract_microdata_recipe(html)
-    if source is None:
-        raise RecipeImportError(
-            "No supported recipe markup (JSON-LD or microdata) was found"
-        )
-
-    draft = normalize_to_v6(source, source_url=url)
+    draft = parse_recipe_html(html, source_url=url)
 
     if store is not None and recipe_id is not None:
         await store.save_import_html(recipe_id, html)
