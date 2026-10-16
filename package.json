@@ -8,7 +8,10 @@
     "validate": "tsx validate-recipes.ts",
     "dev": "node local-preview-server.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/frontend/*.test.js tests/frontend/components/*.test.js tests/frontend/services/*.test.js"
+    "test": "node --test tests/frontend/*.test.js tests/frontend/components/*.test.js tests/frontend/services/*.test.js && npm run test:release",
+    "test:release": "tsx --test tests/release/*.test.ts",
+    "release:preview": "tsx scripts/release.ts --preview",
+    "release": "tsx scripts/release.ts --publish"
   },
   "devDependencies": {
     "@types/node": "26.2.0",
