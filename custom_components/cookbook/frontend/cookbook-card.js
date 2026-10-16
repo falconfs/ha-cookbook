@@ -986,9 +986,9 @@ function injectMetroShadowStyles(shadowRoot) {
   border-radius: 0;
 }
 
-/* Column flex only while open, so the header stays fixed and the body takes the
-   rest and scrolls. Applying flex unconditionally would override the browser
-   default that hides a closed dialog, making an empty dialog show over the grid. */
+/* Column flex only while open. The body takes the remaining height and scrolls
+   as one surface, including the image header. Applying flex unconditionally
+   would override the browser default that hides a closed dialog. */
 .metro-dialog[open] {
   display: flex;
   flex-direction: column;
@@ -1087,18 +1087,12 @@ function injectMetroShadowStyles(shadowRoot) {
 
 .metro-dialog__body {
   overflow-y: auto;
-  /* Flex child of the column dialog: take the remaining height after the
-     (optional) image header and scroll internally. min-height:0 is required so
-     the flex item is allowed to shrink and the footer never leaves the dialog. */
+  /* Flex child of the column dialog: take the remaining height and allow the
+     image and recipe content to scroll together. */
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-
-/* The image header must not shrink; the body absorbs the rest. */
-.metro-dialog__header {
-  flex-shrink: 0;
 }
 
 .metro-dialog__title-bar {

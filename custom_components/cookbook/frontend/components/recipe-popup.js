@@ -339,6 +339,10 @@ export class RecipePopup {
       dialog.style.maxHeight = '90vh';
     }
 
+    // Scrollable body: the image header scrolls away with the recipe content.
+    const body = document.createElement('div');
+    body.className = 'metro-dialog__body';
+
     // Header (image area)
     const header = document.createElement('div');
     header.className = 'metro-dialog__header';
@@ -369,11 +373,7 @@ export class RecipePopup {
     header.appendChild(img);
     header.appendChild(headerPlaceholder);
     header.appendChild(closeBtn);
-    dialog.appendChild(header);
-
-    // Scrollable body
-    const body = document.createElement('div');
-    body.className = 'metro-dialog__body';
+    body.appendChild(header);
 
     // Title bar
     const titleBar = document.createElement('div');

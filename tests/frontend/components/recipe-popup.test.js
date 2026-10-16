@@ -219,6 +219,14 @@ function createPopup(i18n = createI18n({ locale: 'de' })) {
   return { mount, popup };
 }
 
+test('scrolls the recipe image together with the dialog content', () => {
+  const { popup } = createPopup();
+  const scrollableBody = popup._dialog.querySelector('.metro-dialog__body');
+
+  assert.equal(scrollableBody.querySelector('.metro-dialog__header'), popup._els.header);
+  assert.notEqual(popup._els.header.parentElement, popup._dialog);
+});
+
 test('updates recipe dialog labels when the UI language changes', () => {
   const { popup } = createPopup();
   assert.equal(popup._els.cookedBtn.textContent, 'Heute gekocht');
