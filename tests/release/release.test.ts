@@ -6,13 +6,123 @@ import { join } from 'node:path';
 import test, { type TestContext } from 'node:test';
 import { promisify } from 'node:util';
 import {
-  analyzeCommits, bumpVersion, CommandError, parseArguments, runRelease,
+  analyzeCommits, bumpVersion, CommandError, parseArguments, runGithub, runRelease,
   type Command, type ReleaseOptions,
 } from '../../scripts/release.ts';
 
 const execFileAsync = promisify(execFile);
 const VERSION_FILES = ['custom_components/cookbook/manifest.json', 'package.json', 'package-lock.json'];
 const CHECKS = ['npm test', 'npm run typecheck', 'python3 -m pytest tests/integration -q'];
+const GH_IMAGE = 'serversideup/github-cli:latest';
+
+function dockerGithubArgs(command: string, args: readonly string[]): readonly string[] | undefined {
+  const imageIndex = args.indexOf(GH_IMAGE);
+  return command === 'docker' && args[0] === 'run' && imageIndex >= 0 ? args.slice(imageIndex + 1) : undefined;
+}
+
+test('GitHub commands use Docker with persistent config and no host gh dependency', async t => {
+  const home = await mkdtemp(join(tmpdir(), 'cookbook-gh-'));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  const env = { HOME: home, GH_TOKEN: 'secret-token', HTTPS_PROXY: 'http://private-proxy.invalid:8080', GH_CONFIG_DIR: '/host/config' };
+  let count = 0;
+  const execute: Command = async (command, args, options) => {
+    count++;
+    assert.equal(command, 'docker');
+    assert.deepEqual(dockerGithubArgs(command, args), ['auth', 'status', '--hostname', 'github.com']);
+    assert.ok(args.includes('type=volume,src=gh-config,dst=/config/gh'));
+    assert.ok(args.includes('GH_CONFIG_DIR=/config/gh'));
+    assert.ok(args.includes('--rm'));
+    assert.ok(args.includes('--interactive'));
+    assert.ok(args.includes('GH_TOKEN'));
+    assert.ok(args.includes('HTTPS_PROXY'));
+    assert.equal(args.join(' ').includes('private-proxy.invalid'), false);
+    assert.equal(args.join(' ').includes('secret-token'), false);
+    assert.equal(args.join(' ').includes('/host/config'), false);
+    assert.equal(args.some(arg => arg.includes('SSL_CERT_FILE')), false);
+    assert.equal(options.env.GH_TOKEN, 'secret-token');
+    assert.equal(args[args.indexOf('--entrypoint') + 1], 'gh');
+    return 'authenticated';
+  };
+  assert.equal(await runGithub(['auth', 'status', '--hostname', 'github.com'], { cwd: home, env }, execute), 'authenticated');
+  assert.equal(count, 1);
+});
+
+test('Docker GitHub uses the default CA bundle read-only when it exists', async t => {
+  const home = await mkdtemp(join(tmpdir(), 'cookbook-gh-'));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  await mkdir(join(home, '.config/certs'), { recursive: true });
+  const bundle = join(home, '.config/certs/ca-bundle.pem');
+  await writeFile(bundle, 'fixture bundle');
+  const execute: Command = async (command, args) => {
+    assert.equal(command, 'docker');
+    assert.ok(args.includes(`type=bind,src=${bundle},dst=/tmp/ca-bundle.pem,readonly`));
+    assert.ok(args.includes('SSL_CERT_FILE=/tmp/ca-bundle.pem'));
+    assert.equal(args.some(arg => arg.includes('SKIP_VERIFY') || arg.includes('INSECURE')), false);
+    return '';
+  };
+  await runGithub(['--version'], { cwd: home, env: { HOME: home } }, execute);
+});
+
+test('Docker GitHub supports a custom CA path containing spaces', async t => {
+  const home = await mkdtemp(join(tmpdir(), 'cookbook-gh-'));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  const bundle = join(home, 'custom CA.pem');
+  await writeFile(bundle, 'fixture bundle');
+  const execute: Command = async (_command, args) => {
+    assert.ok(args.includes(`type=bind,src=${bundle},dst=/tmp/ca-bundle.pem,readonly`));
+    return '';
+  };
+  await runGithub(['--version'], { cwd: home, env: { HOME: home, COOKBOOK_GH_CA_BUNDLE: bundle } }, execute);
+});
+
+test('a missing explicitly configured CA bundle fails before starting Docker', async t => {
+  const home = await mkdtemp(join(tmpdir(), 'cookbook-gh-'));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  await assert.rejects(runGithub(['--version'], {
+    cwd: home, env: { HOME: home, COOKBOOK_GH_CA_BUNDLE: join(home, 'missing.pem') },
+  }, async () => assert.fail('Docker must not run without the configured CA bundle')), /CA bundle/);
+});
+
+test('release notes pass unchanged through Docker stdin without a TTY', async t => {
+  const home = await mkdtemp(join(tmpdir(), 'cookbook-gh-'));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  const notes = '## 1.1.0\n\n- feat: a "quoted" recipe\n- fix: $HOME stays literal\n';
+  const args = ['release', 'create', '1.1.0', '--repo', 'falconfs/ha-cookbook', '--verify-tag', '--notes-file', '-'];
+  const execute: Command = async (command, dockerArgs, options) => {
+    assert.deepEqual(dockerGithubArgs(command, dockerArgs), args);
+    assert.ok(dockerArgs.includes('--interactive'));
+    assert.equal(dockerArgs.includes('--tty') || dockerArgs.includes('-t') || dockerArgs.includes('-it'), false);
+    assert.equal(options.input, notes);
+    return '';
+  };
+  await runGithub(args, { cwd: home, env: { HOME: home }, input: notes }, execute);
+});
+
+test('Docker GitHub quotes a CA source containing CSV metacharacters', async t => {
+  const home = await mkdtemp(join(tmpdir(), 'cookbook-gh-'));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  const bundle = join(home, 'custom,"CA.pem');
+  await writeFile(bundle, 'fixture bundle');
+  const execute: Command = async (_command, args) => {
+    assert.ok(args.includes(`type=bind,"src=${home}/custom,""CA.pem",dst=/tmp/ca-bundle.pem,readonly`));
+    return '';
+  };
+  await runGithub(['--version'], { cwd: home, env: { HOME: home, COOKBOOK_GH_CA_BUNDLE: bundle } }, execute);
+});
+
+test('Docker GitHub preserves CLI stderr for HTTP status handling without logging secrets', async t => {
+  const home = await mkdtemp(join(tmpdir(), 'cookbook-gh-'));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  const error = new CommandError('docker', 1, 'gh: Not Found (HTTP 404) secret-token');
+  await assert.rejects(runGithub(['api', 'repos/example/repo/releases/tags/1.0.0'], {
+    cwd: home, env: { HOME: home },
+  }, async () => { throw error; }), actual => {
+    assert.equal(actual, error);
+    assert.doesNotMatch(String(actual), /secret-token/);
+    assert.match(error.stderr, /HTTP 404/);
+    return true;
+  });
+});
 
 for (const [message, expected] of [
   ['fix: repair import', 'patch'], ['fix(parser): repair import', 'patch'],
@@ -87,6 +197,9 @@ async function fixture(t: TestContext) {
   let afterCheck: (() => Promise<void>) | undefined;
   let repositoryUrl = 'git@github.com:falconfs/ha-cookbook.git';
   const execute: Command = async (file, args, options) => {
+    const githubArgs = dockerGithubArgs(file, args);
+    assert.notEqual(file, 'gh', 'Release must not invoke gh on the host');
+    if (githubArgs) { file = 'gh'; args = githubArgs; }
     const command = `${file} ${args.join(' ')}`;
     calls.push(command);
     if (command.includes(fail) && fail) throw new CommandError(file, 1, 'simulated failure secret-token');
@@ -228,6 +341,19 @@ test('authentication failure stops before edits without exposing credentials', a
     return true;
   });
   assert.deepEqual(await f.snapshot(), before);
+});
+
+test('Docker startup failure stops before editing release files', async t => {
+  const f = await fixture(t);
+  await f.commit('fix: repair');
+  const before = await f.snapshot();
+  const execute: Command = (file, args, options) => {
+    if (file === 'docker') throw new CommandError('docker', 125, 'daemon unavailable');
+    return f.execute(file, args, options);
+  };
+  await assert.rejects(f.run({ execute }), /docker failed/);
+  assert.deepEqual(await f.snapshot(), before);
+  assert.equal(f.releases.size, 0);
 });
 
 test('version mismatch is rejected before edits', async t => {
@@ -391,7 +517,7 @@ for (const response of ['draft', 'server error', 'malformed']) {
     await f.commit('feat: calendar');
     const before = await f.snapshot();
     const execute: Command = (file, args, options) => {
-      if (file === 'gh' && args[0] === 'api') {
+      if (dockerGithubArgs(file, args)?.[0] === 'api') {
         if (response === 'server error') throw new CommandError('gh', 1, 'server unavailable (HTTP 503)');
         return Promise.resolve(response === 'malformed' ? '{}' : JSON.stringify({ tag_name: '1.1.0', draft: true, prerelease: false }));
       }

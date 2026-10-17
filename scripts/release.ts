@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { access, readFile, stat, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -31,6 +33,13 @@ const MANIFEST = 'custom_components/cookbook/manifest.json';
 const VERSION_FILES = [MANIFEST, 'package.json', 'package-lock.json'];
 const STABLE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const RELEASE_MARKER = 'Cookbook-Release: ';
+const GH_DOCKER_IMAGE = 'serversideup/github-cli:latest';
+const GH_CONFIG_MOUNT = 'type=volume,src=gh-config,dst=/config/gh';
+const GH_CA_PATH = '/tmp/ca-bundle.pem';
+const GH_FORWARDED_ENV = [
+  'GH_TOKEN', 'GITHUB_TOKEN', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
+  'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy',
+];
 const CHECKS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['npm', ['test']], ['npm', ['run', 'typecheck']],
   ['python3', ['-m', 'pytest', 'tests/integration', '-q']],
@@ -54,6 +63,34 @@ const executeCommand: Command = (command, args, { cwd, env, input }) => new Prom
   child.stdin.on('error', () => { /* A failing command may close stdin before consuming release notes. */ });
   child.stdin.end(input);
 });
+
+export async function runGithub(args: readonly string[], options: CommandOptions, execute: Command = executeCommand): Promise<string> {
+  const dockerArgs = [
+    'run', '--rm', '--interactive', '--mount', GH_CONFIG_MOUNT,
+    '--env', 'GH_CONFIG_DIR=/config/gh', '--env', 'GH_HOST=github.com',
+    '--env', 'GH_PROMPT_DISABLED=1',
+  ];
+  const configuredBundle = options.env.COOKBOOK_GH_CA_BUNDLE;
+  const bundle = resolve(options.cwd, configuredBundle ?? join(options.env.HOME ?? homedir(), '.config/certs/ca-bundle.pem'));
+  let hasBundle = false;
+  try {
+    if (!(await stat(bundle)).isFile()) throw new Error('CA bundle must be a regular file.');
+    await access(bundle, constants.R_OK);
+    hasBundle = true;
+  } catch (error) {
+    if (configuredBundle !== undefined || !(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+      throw new Error('GitHub Docker CA bundle is missing, unreadable, or not a regular file.');
+    }
+  }
+  if (hasBundle) {
+    const source = `src=${bundle}`;
+    const field = /[",\r\n]/.test(source) ? `"${source.replaceAll('"', '""')}"` : source;
+    dockerArgs.push('--mount', `type=bind,${field},dst=${GH_CA_PATH},readonly`, '--env', `SSL_CERT_FILE=${GH_CA_PATH}`);
+  }
+  for (const name of GH_FORWARDED_ENV) if (options.env[name]) dockerArgs.push('--env', name);
+  dockerArgs.push('--entrypoint', 'gh', GH_DOCKER_IMAGE, ...args);
+  return execute('docker', dockerArgs, options);
+}
 
 function versionParts(version: string): [number, number, number] {
   if (!STABLE_VERSION.test(version)) throw new Error('Expected a stable unprefixed MAJOR.MINOR.PATCH version.');
@@ -290,10 +327,13 @@ export async function runRelease(options: ReleaseOptions): Promise<void> {
   if ((env.CI && env.CI !== 'false') || env.GITHUB_ACTIONS === 'true' || env.GITLAB_CI === 'true') throw new Error('Releases must be explicitly run locally, not in CI.');
   const cwd = resolve(options.cwd ?? process.cwd());
   const execute = options.execute ?? executeCommand;
-  const command = (file: string, args: readonly string[], input?: string) => execute(file, args, {
-    cwd, env: { ...env, GH_HOST: 'github.com', GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' },
-    ...(input === undefined ? {} : { input }),
-  });
+  const command = (file: string, args: readonly string[], input?: string) => {
+    const commandOptions = {
+      cwd, env: { ...env, GH_HOST: 'github.com', GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' },
+      ...(input === undefined ? {} : { input }),
+    };
+    return file === 'gh' ? runGithub(args, commandOptions, execute) : execute(file, args, commandOptions);
+  };
   const context: Context = { cwd, command, git: (...args) => command('git', args), log: options.log ?? console.log, repository: '' };
   await assertCheckout(context);
   await verifyRepository(context);

@@ -38,17 +38,23 @@ the HACS default store:
 ## Local releases
 
 Releases are started manually on your computer, not automatically by CI.
-The TypeScript script uses the existing `tsx` dependency, Git, and GitHub CLI
-(`gh`); it does not use semantic-release or add npm dependencies. It publishes
-a GitHub Release, not an npm package. Release notes live in GitHub Releases.
+The TypeScript script uses the existing `tsx` dependency and host Git. Every
+GitHub CLI (`gh`) command runs through Docker using
+`serversideup/github-cli:latest` and the persistent `gh-config` volume; a host
+installation of `gh` is not needed. The script does not use semantic-release or
+add npm dependencies. It publishes a GitHub Release, not an npm package.
+Release notes live in GitHub Releases.
 
 ### Prerequisites
 
-- Use Node.js 22 or newer, Git, GitHub CLI, and Python with pytest installed.
-  Install the project's development dependencies with `npm ci`.
-- Authenticate GitHub CLI with `gh auth login`, or provide `GH_TOKEN` /
-  `GITHUB_TOKEN` through your environment. Keep credentials out of repository
-  files and command history. Git push authentication must also be configured.
+- Use Node.js 22 or newer, host Git, Docker with its daemon running, and Python
+  with pytest installed. Install the project's development dependencies with
+  `npm ci`. Docker must be able to run `serversideup/github-cli:latest`.
+- Authenticate GitHub CLI inside Docker as described below, or provide
+  `GH_TOKEN` / `GITHUB_TOKEN` through your environment. The script forwards
+  token variables by name, not their values in command arguments. Keep
+  credentials out of repository files, logs, chat, and command history.
+  Host Git push authentication remains separate and must also be configured.
 - The account needs permission to push commits/tags and create releases.
   Branch protection must permit the release commit; the script does not bypass it.
 - Run from a clean `main` checkout synchronized with `origin/main`, including
@@ -66,6 +72,45 @@ The existing `1.0.0` tag bootstraps this repository. If the baseline is missing,
 verify the repository's published release history and obtain its existing tag
 before trying again. Do not create a replacement tag at an arbitrary commit.
 Prerelease tags and tags on unmerged history are not release baselines.
+
+### Docker GitHub authentication and TLS
+
+All scripted GitHub commands mount `gh-config` at `/config/gh` and explicitly
+set `GH_CONFIG_DIR=/config/gh`. A host `gh` login or host `GH_CONFIG_DIR` is not
+used. The container is removed after each invocation; the named volume persists.
+Credentials in that volume are stored in plain text, so protect access to it.
+
+If `$HOME/.config/certs/ca-bundle.pem` exists, every GitHub invocation mounts
+it read-only at `/tmp/ca-bundle.pem` and sets `SSL_CERT_FILE` to that path.
+For another CA bundle, set `COOKBOOK_GH_CA_BUNDLE` to a readable PEM file; an
+explicit missing/unreadable path stops before Docker runs. Without a default
+bundle or override, the container uses its normal certificate trust store.
+TLS verification is never disabled. Standard uppercase/lowercase HTTP, HTTPS,
+ALL, and NO proxy variables are forwarded when set; their addresses must be
+reachable from the container, not only from the host.
+
+For an interactive login with the default CA bundle present and Docker Desktop
+running:
+
+```bash
+docker run --rm -it \
+  --mount type=volume,src=gh-config,dst=/config/gh \
+  --mount "type=bind,src=$HOME/.config/certs/ca-bundle.pem,dst=/tmp/ca-bundle.pem,readonly" \
+  --env SSL_CERT_FILE=/tmp/ca-bundle.pem \
+  --env GH_CONFIG_DIR=/config/gh \
+  serversideup/github-cli:latest \
+  sh -c 'gh auth login --hostname github.com --git-protocol ssh && gh auth status'
+```
+
+Confirm `gh auth status` reports the account and `/config/gh/hosts.yml`. On a
+host that does not need the private CA, omit both the CA bind mount and
+`SSL_CERT_FILE` from the login command; with a custom bundle use that file
+instead. Keep the same volume/config directory for every later invocation.
+
+The release script uses non-TTY interactive stdin (`docker run --interactive`)
+so multiline release notes reach `gh release create --notes-file -` unchanged.
+It overrides the container entrypoint with `gh`, passes arguments directly
+without a shell, and does not mount the checkout or host SSH keys into Docker.
 
 ### Commit rules
 
