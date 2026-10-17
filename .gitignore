@@ -8,3 +8,6 @@ __pycache__/
 # HA-checkout planning history copied only for local migration context.
 docs/planings/
 /.idea
+
+# Machine-local agent instructions.
+/.agents/local/

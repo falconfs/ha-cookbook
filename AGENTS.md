@@ -67,3 +67,30 @@ strings/objects/arrays. `tool` is often absent; do not invent it.
 The root `conftest.py` stubs Home Assistant dependencies for pure Python tests.
 Do not add production test files inside `custom_components/cookbook/`, since
 HACS distributes that directory to users.
+
+## GitHub CLI and releases
+
+- Prefer the repository release workflow: inspect `DEPLOYMENT.md`, run
+  `npm run release:preview`, and publish only with `npm run release` after
+  reviewing the proposed version and notes. Do not create or move version tags
+  manually to bypass the release script.
+- The release script runs all GitHub CLI commands in Docker using
+  `serversideup/github-cli:latest`. This integration has been implemented and
+  tested, including authentication, API reads, and multiline stdin. Host `gh`
+  is not needed; Git operations and Git push authentication remain on the host.
+- For direct GitHub CLI commands in Docker, use the same image and the named
+  `gh-config` volume. Set `GH_CONFIG_DIR=/config/gh` on every invocation so
+  credentials are written to the mounted volume rather than the disposable
+  container's default home.
+- The login is complete only when `gh auth status` reports the account and the
+  config path `/config/gh/hosts.yml`. The CLI stores credentials in plain text
+  in that Docker volume; protect access to the volume and never paste tokens into
+  chat, source files, logs, or command history. The container itself can be
+  removed with `--rm`; the named volume persists.
+- Reuse the same volume and `GH_CONFIG_DIR` for every later `gh` invocation.
+  For example, run `gh release view <version> --repo <owner/repo>` as the
+  container command after the image name. Git push authentication is separate
+  and must also be configured for release publication.
+- Automated commands must not allocate a TTY; use `--interactive` to preserve
+  stdin for release notes. Forward token/proxy environment variables by name,
+  not by embedding secrets in command arguments.
